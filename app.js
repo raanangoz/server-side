@@ -222,7 +222,6 @@ app.post('/register',function (req,res) {
         country=req.body['country'], email=req.body['email'], username=req.body['username'],
         password=req.body['password'], favorite_categories=req.body['interests'],
         questions=req.body['questions'],answers=req.body['answers'];
-    console.log(req.body);
     var user_values = [surround_with_quotes(username),surround_with_quotes(firstname),surround_with_quotes(lastname),surround_with_quotes(city),surround_with_quotes(country),surround_with_quotes(password),surround_with_quotes(email)];
     //check all paramaters recieved
     var legalPassword = true;
@@ -492,9 +491,12 @@ app.get('/get_poi/:poi_name', function(req, res){
 app.get('/get_countries', function(req, res){
     select_query('country','*')
         .then(function (result) {
+
             res.send(result);
+
         })
         .catch(function (error) {
+
             res.send(error);
         })
 });
@@ -515,7 +517,15 @@ app.get('/get_POIIDs_ByCategory',function (req,res) {
             res.send(err);
         })
 });
-
+app.get('/get_validation_questions', function(req, res){
+    select_query('ValidationQuestions','*')
+        .then(function (result) {
+            res.send(result);
+        })
+        .catch(function (error) {
+            res.send(error);
+        })
+});
 // app.get('/get_validation_questions', function(req, res){
 //     select_query('ValidationQuestions','*')
 //         .then(function (result) {
