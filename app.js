@@ -266,21 +266,23 @@ app.post('/register',function (req,res) {
                 console.log(util.format("ATTEMPTING TO EXECUTE QUERY:\n%s", insert_userInterest_transaction_query));
                 DButilsAzure.execQuery(insert_userInterest_transaction_query)
                     .then(function (result2) {
-                        //for (let i = 0; i < questions.length; i++) {
-                            //if(answers[i]!=null) {
-                                //var save_values = [surround_with_quotes(username), surround_with_quotes(questions[i]), surround_with_quotes(answers[i])];
-                                var query=("INSERT INTO retrievalQuestions (User_name,Question,Answer) VALUES ('" +username+ "','" + questions+ "','" + answers+ "')");
-                                //var insert_rq_query = get_insert_query('retrievalQuestions', retrievalQuestions_column_names, save_values);
-                                console.log(util.format("ATTEMPTING TO EXECUTE QUERY:\n%s", query));
-                                DButilsAzure.execQuery(query).then
+
+
+                        for (let i = 0; i < questions.length; i++) {
+                            if(answers[i]!=null) {
+                                var save_values = [surround_with_quotes(username), surround_with_quotes(questions[i]), surround_with_quotes(answers[i])];
+
+                                var insert_rq_query = get_insert_query('retrievalQuestions', retrievalQuestions_column_names, save_values);
+                                console.log(util.format("ATTEMPTING TO EXECUTE QUERY:\n%s", insert_rq_query));
+                                DButilsAzure.execQuery(insert_rq_query).then
                                 (function (res4){
                                     res.status(200).send("success to insert to rq table");
                                 })
                                     .catch(function (err4){
                                         res.status(400).send("failed to insert to rq table");
                                     })
-                            //}
-                        //}//for
+                            }
+                        }//for
                         res.status(200).send('registration completed successfully');
                     })//thenresult2
                     .catch(function (err2) {
@@ -444,27 +446,15 @@ app.get('/get_POIs/:categories',function (req,res) {
 //         })
 // });
 
-app.post('/retrievalQuestions', function (req, res) {
-    var username = req.body["User_name"], que = req.body["Question"], ans = req.body["Answer"];
-    var query=("INSERT INTO retrievalQuestions (User_name,Question,Answer) VALUES ('" +username+ "','" + que+ "','" + ans+ "')");
-    DButilsAzure.execQuery(query)
-        .then(function (result) {
-            res.send(result);
-        })
-        .catch(function (error) {
-            res.send(error);
-        })
-});
-
-app.get('/get_validation_questions', function(req, res){
-    select_query('ValidationQuestions','*')
-        .then(function (result) {
-            res.send(result);
-        })
-        .catch(function (error) {
-            res.send(error);
-        })
-});
+// app.get('/retrievalQuestions', function (req, res) {
+//     select_query('retrievalQuestions','*')
+//         .then(function (result) {
+//             res.send(result);
+//         })
+//         .catch(function (error) {
+//             res.send(error);
+//         })
+// });
 
 // app.get('/get_userInterests', function (req, res) {
 //     select_query('userInterests','*')
