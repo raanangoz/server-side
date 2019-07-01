@@ -89,27 +89,6 @@ let select_query = (table_name,cols_to_select_array, where_conditions_array) => 
     );
 };
 
-let update_query = (table_name,columnToUpdate, where_conditions_array, newValue) => {
-    return new Promise(
-        ((resolve, reject) =>{
-            var query = util.format('UPDATE %s ' +
-                'SET %s' +' = %s '
-                ,table_name, columnToUpdate,newValue);
-            if(where_conditions_array && where_conditions_array.length>0){
-                query+=" WHERE "+where_conditions_array.join(" AND ");
-            }
-            console.log(util.format('Attempting to perform select query:\n%s',query));
-            DButilsAzure.execQuery(query)
-                .then(function (res) {
-                    resolve(res)
-                })
-                .catch(function (err) {
-                    reject(err)
-                })
-        })
-    );
-};
-
 function validateToken(token){
     // const token = req.header("x-auth-token");
     // no token
@@ -219,16 +198,6 @@ app.get('/get_retrieval_questions_for_user/:username',function (req, res) {
         })
 });
 
-// app.get('/reviews', function (req, res) {
-//     select_query('reviews','*')
-//         .then(function (result) {
-//             res.send(result);
-//         })
-//         .catch(function (error) {
-//             res.send(error);
-//         })
-// });
-
 app.post('/login',function (req,res) {
     var username = req.body['username'];
     var password = req.body['password'] ;
@@ -248,13 +217,12 @@ app.post('/login',function (req,res) {
 });
 
 app.post('/register',function (req,res) {
-
-
+    console.log(req.body);
     var firstname=req.body['firstname'], lastname=req.body['lastname'], city=req.body['city'],
         country=req.body['country'], email=req.body['email'], username=req.body['username'],
         password=req.body['password'], favorite_categories=req.body['interests'],
         questions=req.body['questions'],answers=req.body['answers'];
-
+    console.log(req.body);
     var user_values = [surround_with_quotes(username),surround_with_quotes(firstname),surround_with_quotes(lastname),surround_with_quotes(city),surround_with_quotes(country),surround_with_quotes(password),surround_with_quotes(email)];
     //check all paramaters recieved
     var legalPassword = true;
@@ -262,11 +230,8 @@ app.post('/register',function (req,res) {
     if (!(password.match("^[A-Za-z0-9]+$"))) {
         res.status(400).send("password must contain only digits and letters");
     }
-
-
     if ( password.length < 5 || password.length > 10){
         res.status(400).send('password must be between 5 and 10 characters')
-
     }
     else if(!(favorite_categories && favorite_categories.length>0 && firstname && lastname && city
         && country && email && username && password && favorite_categories)){
@@ -280,15 +245,12 @@ app.post('/register',function (req,res) {
     else if (!(username.match("^[A-Za-z]+$"))) {
 
         res.status(400).send("username must contain only letters");
-
     }
-
     else if (answers.length<2){
 
         res.status(400).send("You have to insert at least two validation answers")
     }
     else {
-
         var insert_userInterest_queries = [];
         for (let i = 0; i < favorite_categories.length; i++) {
             insert_userInterest_queries.push(get_insert_query('userInterests',userInterest_column_names,[surround_with_quotes(username),surround_with_quotes(favorite_categories[i])]));
@@ -297,7 +259,6 @@ app.post('/register',function (req,res) {
             "%s;\n" +
             "COMMIT TRANSACTION;",insert_userInterest_queries.join(';\n'));
         var inset_user_query = get_insert_query('users', user_column_names, user_values);
-
         console.log(util.format("ATTEMPTING TO EXECUTE QUERY:\n%s",inset_user_query));
         DButilsAzure.execQuery(inset_user_query)
             .then(function (result1) {
@@ -305,34 +266,28 @@ app.post('/register',function (req,res) {
                 console.log(util.format("ATTEMPTING TO EXECUTE QUERY:\n%s", insert_userInterest_transaction_query));
                 DButilsAzure.execQuery(insert_userInterest_transaction_query)
                     .then(function (result2) {
-
-
-                        for (let i = 0; i < questions.length; i++) {
-                            if(answers[i]!=null) {
-                                var save_values = [surround_with_quotes(username), surround_with_quotes(questions[i]), surround_with_quotes(answers[i])];
-
-                                var insert_rq_query = get_insert_query('retrievalQuestions', retrievalQuestions_column_names, save_values);
-                                console.log(util.format("ATTEMPTING TO EXECUTE QUERY:\n%s", insert_rq_query));
-                                DButilsAzure.execQuery(insert_rq_query).then
+                        //for (let i = 0; i < questions.length; i++) {
+                            //if(answers[i]!=null) {
+                                //var save_values = [surround_with_quotes(username), surround_with_quotes(questions[i]), surround_with_quotes(answers[i])];
+                                var query=("INSERT INTO retrievalQuestions (User_name,Question,Answer) VALUES ('" +username+ "','" + questions+ "','" + answers+ "')");
+                                //var insert_rq_query = get_insert_query('retrievalQuestions', retrievalQuestions_column_names, save_values);
+                                console.log(util.format("ATTEMPTING TO EXECUTE QUERY:\n%s", query));
+                                DButilsAzure.execQuery(query).then
                                 (function (res4){
                                     res.status(200).send("success to insert to rq table");
                                 })
                                     .catch(function (err4){
                                         res.status(400).send("failed to insert to rq table");
                                     })
-                            }
-                        }//for
-
-
+                            //}
+                        //}//for
                         res.status(200).send('registration completed successfully');
                     })//thenresult2
-
                     .catch(function (err2) {
                         var delete_where_conditions = [];
                         for (let i = 0; i < user_column_names.length; i++) {
                             delete_where_conditions.push(util.format('%s=%s', user_column_names[i], (user_values[i])));
                         }
-
                         delete_query('users', delete_where_conditions)
                             .then(function (result3) {
                                 res.send(err1 + '\nNo registration completed')
@@ -340,12 +295,10 @@ app.post('/register',function (req,res) {
                             .catch(function (err3) {
                                 res.status(400).send(util.format('First error:\n%s\nSecond Error:%s\nUSER CREATED, NO CATEGORIES INSERTED, USER NOT DELETED', err1, err2))
                             })
-
                     })
             })
             .catch(function (err1) {
                 res.status(400).send("username is already taken");
-
                 res.send(err1);
             })
     }
@@ -427,7 +380,6 @@ let sort_pois_by_avg_rating = () => {
 };
 
 app.get('/get_POIs/:categories',function (req,res) {
-
     var cat = req.params["categories"];
     //var sorted_by_rating = (req.params['sorted_by_rating'] && (typeof req.params['sorted_by_rating'] === 'String' || req.params['sorted_by_rating'] instanceof String) && req.params['sorted_by_rating'].toLowerCase() === 'true');
     //var rating_range = req.params["rating range"];
@@ -492,8 +444,20 @@ app.get('/get_POIs/:categories',function (req,res) {
 //         })
 // });
 
-app.get('/retrievalQuestions', function (req, res) {
-    select_query('retrievalQuestions','*')
+app.post('/retrievalQuestions', function (req, res) {
+    var username = req.body["User_name"], que = req.body["Question"], ans = req.body["Answer"];
+    var query=("INSERT INTO retrievalQuestions (User_name,Question,Answer) VALUES ('" +username+ "','" + que+ "','" + ans+ "')");
+    DButilsAzure.execQuery(query)
+        .then(function (result) {
+            res.send(result);
+        })
+        .catch(function (error) {
+            res.send(error);
+        })
+});
+
+app.get('/get_validation_questions', function(req, res){
+    select_query('ValidationQuestions','*')
         .then(function (result) {
             res.send(result);
         })
@@ -523,7 +487,6 @@ app.get('/retrievalQuestions', function (req, res) {
 // });
 
 app.get('/get_poi/:poi_name', function(req, res){
-
     var POI_NAME = req.params["poi_name"];
     select_query('POI',['*'],[util.format('name=\'%s\'',POI_NAME)])
         .then(function (result) {
@@ -539,19 +502,12 @@ app.get('/get_poi/:poi_name', function(req, res){
 app.get('/get_countries', function(req, res){
     select_query('country','*')
         .then(function (result) {
-            var countries = [];
-            for (let i = 0; i < result.length; i++) {
-                countries.push(result[i]['country_name']);
-            }
-            var json_to_send = {countries:countries};
-            res.json(json_to_send);
+            res.send(result);
         })
-        .catch(function (err) {
-            console.log(err);
-            res.send(err);
+        .catch(function (error) {
+            res.send(error);
         })
 });
-
 
 app.get('/get_POIIDs_ByCategory',function (req,res) {
     var categoryName = req.body['category'];
@@ -570,21 +526,21 @@ app.get('/get_POIIDs_ByCategory',function (req,res) {
         })
 });
 
-app.get('/get_validation_questions', function(req, res){
-    select_query('ValidationQuestions','*')
-        .then(function (result) {
-            var questions = [];
-            for (let i = 0; i < result.length; i++) {
-                questions.push(result[i]['que_description']);
-            }
-            var json_to_send = {questions:questions};
-            res.json(questions);
-        })
-        .catch(function (err) {
-            console.log(err);
-            res.send(err);
-        })
-});
+// app.get('/get_validation_questions', function(req, res){
+//     select_query('ValidationQuestions','*')
+//         .then(function (result) {
+//             var questions = [];
+//             for (let i = 0; i < result.length; i++) {
+//                 questions.push(result[i]['que_description']);
+//             }
+//             var json_to_send = {questions:questions};
+//             res.json(questions);
+//         })
+//         .catch(function (err) {
+//             console.log(err);
+//             res.send(err);
+//         })
+// });
 
 // app.get('/get_POI_Picture',function (req,res) {
 //     var poi_name = req.body['poi_name'];
@@ -731,8 +687,8 @@ app.get('/search__poi/:name',function (req,res) {
         })
 });
 
-app.get('/get_last_2_favorites',function (req,res) {
-    var username=req.body['username'];
+app.get('/get_last_2_favorites/:username',function (req,res) {
+    var username=req.params['username'];
     var query = 'SELECT TOP 2 * FROM POI INNER JOIN userFavorites ON POI.POI_ID = userFavorites.POI_ID WHERE userFavorites.User_name ='.concat("'",username,"'")+'ORDER BY userFavorites.add_Date DESC';
     DButilsAzure.execQuery(query)
         .then(function (result) {
@@ -755,7 +711,7 @@ app.get('/get_2_last_reviews/:poi_id',function (req,res) {
         })
 });
 
-app.get('/update_poi_views/:poi_id',function (req,res) {
+app.put('/update_poi_views/:poi_id',function (req,res) {
     var poi_id = req.params["poi_id"];
     var query = "UPDATE POI \n" +
         "SET view_amount= ((SELECT view_amount FROM POI WHERE POI_ID = " +poi_id +")) + 1 \n" +
@@ -769,8 +725,8 @@ app.get('/update_poi_views/:poi_id',function (req,res) {
         })
 });
 
-app.get('/add_review_to_POI',function (req,res) {
-    var poi_id = req.body["poi_id"], content = req.body["content"], rating = req.body["rating"], Date='GETDATE()';
+app.post('/add_review_to_POI',function (req,res) {
+    var poi_id = req.body["poi_id"], content = req.body["content"], rating = req.body["rating"], username = req.body["User_name"], Date='GETDATE()';
     var max = 1;
     var query = 'SELECT reviewID FROM reviews WHERE reviewID=(SELECT max(reviewID) FROM reviews)';
     var max_res;
@@ -779,8 +735,8 @@ app.get('/add_review_to_POI',function (req,res) {
             max_res = result;
             max = max_res[0].reviewID + 1;
             req.body.content = req.body.content.replace("'","''");
-            var check = "IF NOT EXISTS (SELECT * FROM reviews WHERE User_name = '".concat(req.username,"' and POI_ID = ",poi_id,") BEGIN ");
-            query = check.concat('INSERT INTO reviews (reviewID, content, Date, rating, POI_ID, User_name) VALUES ('.concat(max,", '",content,"',",Date,",",rating,",'", poi_id,"','",req.username,"'",')')," END;");
+            var check = "IF NOT EXISTS (SELECT * FROM reviews WHERE User_name = '".concat(username,"' and POI_ID = ",poi_id,") BEGIN ");
+            query = check.concat('INSERT INTO reviews (reviewID, content, Date, rating, POI_ID, User_name) VALUES ('.concat(max,", '",content,"',",Date,",",rating,",'", poi_id,"','",username,"'",')')," END;");
             DButilsAzure.execQuery(query)
                 .then(function(result){
                     res.send(result);
@@ -804,7 +760,6 @@ app.get('/add_review_to_POI',function (req,res) {
                                         .then(function(result){
                                         })
                                         .catch(function(err){
-                                            console.log("line 305");
                                             console.log(err);
                                             res.send(err)
                                         })
