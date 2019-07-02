@@ -1,4 +1,5 @@
 //requires and initialazations
+const ip = require('./pois');
 var express = require('express');
 var app = express();
 var DButilsAzure = require('./DButils');
@@ -7,35 +8,60 @@ var bodyParser = require('body-parser');
 const jwt = require('jsonwebtoken');
 const secret = 'secret';
 app.use(bodyParser.json()); // support json encoded bodies
-//app.use(bodyParser.urlencoded({ extended: true })); // support encoded bodies
+app.use(bodyParser.urlencoded({ extended: true })); // support encoded bodies
+var cors = require('cors');
+app.use(cors());
 
-//table constants
 const user_column_names = ['User_name','First_name','Last_name','City','Country', 'Password', 'Email'];
 const userInterest_column_names = ['User_name', 'Category_name'];
 const review_column_names = ['reviewID','content','Date','rating','POI_ID','User_name'];
 const userFavorites_column_names = ['User_name', 'POI_ID', 'POI_name'];
 const retrievalQuestions_column_names = ['User_name', 'Question', 'Answer'];
 
-
 app.use("/", function(req,res,next) {
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Headers', 'content-type,x-auth-token');
-    res.setHeader('Access-Control-Allow-Methods', 'POST,GET,PUT,DELETE');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type,x-auth-token, Access-Control-Allow-Headers, X-Requested-With');
+    res.setHeader('Access-Control-Allow-Methods', 'POST,GET,PUT,DELETE, OPTIONS');
     next();
 });
-
 
 var port = 3000;
 app.listen(port, function () {
     console.log('Example app listening on port ' + port);
 });
 
+app.use("/private",function (req,res,next){
+    validToken(req,res,next)
+});
+
+function validToken(req, res, next) {
+
+    // console.log(req.header);
+
+    const token = req.header('x-auth-token');
+    console.log(token);
+    // no token
+    if (!token) res.status(401).send("Access denied. No token provided.");
+    // verify token
+    try {
+        const decoded = jwt.verify(token, secret);
+        var userId = decoded.username;
+        req.username = userId;
+        req.decoded = decoded;
+        // console.log(req);
+        next();
+    } catch (exception) {
+
+        res.status(400).send("Invalid token.");
+    }
+}
+
 function surround_with_quotes(string_to_surround){
     return util.format("\'%s\'",string_to_surround)
 }
 
 async function create_token(username){
-    let payload = {id: 1, name: username, admin: false};
+    let payload = {username: username, admin: false};
     let options = {expiresIn: "365d"};
     const token = jwt.sign(payload, secret, options);
     return token;
@@ -89,58 +115,12 @@ let select_query = (table_name,cols_to_select_array, where_conditions_array) => 
     );
 };
 
-function validateToken(token){
-    // const token = req.header("x-auth-token");
-    // no token
-    if (!token) res.status(401).send("Access denied. No token provided.");
-    return false;
-    // verify token
-    try {
-
-        const decoded = jwt.verify(token, secret);
-        req.decoded = decoded;
-
-    } catch (exception) {
-        res.status(400).send("Invalid token.");
-        return false;
-    }
-    return true;
-}
-
-function getUsernameFromToken(req,res,next){
-    const token = req.header('x-auth-token');
-    if (!token) res.status(401).send("Access denied. No token provided.");
-    // verify token
-    try {
-        const decoded = jwt.verify(token, secret);
-        return (decoded.name);
-        req.username = userId;
-        req.decoded = decoded;
-        next();
-        return userId;
-    } catch (exception) {
-        res.status(400).send("Invalid token.");
-    }
-    return true;
-}
-
 app.get('/get_categories', function(req, res){
-    select_query('Categories','*')
-        .then(function (result) {
-            var categories = [];
-            for (let i = 0; i < result.length; i++) {
-                categories.push(result[i]['Category_name']);
-            }
-            var json_to_send = {categories:categories};
-            res.json(json_to_send);
-        })
-        .catch(function (err) {
-            console.log(err);
-            res.send(err);
-        })
+    ip.get_categories(req,res);
 });
-app.get ('/get_poi_details', function(req, res){
-    var poi_id = req.body['poi_id'];
+
+app.get ('/get_poi_details/:poi_id', function(req, res){
+    var poi_id = req.params['poi_id'];
     try {
         var where_conditions = [util.format("poi_id=%s",poi_id)];
         select_query('POI','*',where_conditions)
@@ -217,7 +197,7 @@ app.post('/login',function (req,res) {
 });
 
 app.post('/register',function (req,res) {
-    console.log(req.body);
+    // console.log(req.body);
     var firstname=req.body['firstname'], lastname=req.body['lastname'], city=req.body['city'],
         country=req.body['country'], email=req.body['email'], username=req.body['username'],
         password=req.body['password'], favorite_categories=req.body['interests'],
@@ -245,10 +225,10 @@ app.post('/register',function (req,res) {
 
         res.status(400).send("username must contain only letters");
     }
-    else if (answers.length<2){
-
-        res.status(400).send("You have to insert at least two validation answers")
-    }
+    // else if (answers.length<2){
+    //
+    //     //TODO res.status(400).send("You have to insert at least two validation answers")
+    // }
     else {
         var insert_userInterest_queries = [];
         for (let i = 0; i < favorite_categories.length; i++) {
@@ -268,6 +248,7 @@ app.post('/register',function (req,res) {
 
 
                         for (let i = 0; i < questions.length; i++) {
+
                             if(answers[i]!=null) {
                                 var save_values = [surround_with_quotes(username), surround_with_quotes(questions[i]), surround_with_quotes(answers[i])];
 
@@ -275,7 +256,7 @@ app.post('/register',function (req,res) {
                                 console.log(util.format("ATTEMPTING TO EXECUTE QUERY:\n%s", insert_rq_query));
                                 DButilsAzure.execQuery(insert_rq_query).then
                                 (function (res4){
-                                    res.status(200).send("success to insert to rq table");
+                                    // res.status(200).send("success to insert to rq table");
                                 })
                                     .catch(function (err4){
                                         res.status(400).send("failed to insert to rq table");
@@ -300,12 +281,11 @@ app.post('/register',function (req,res) {
             })
             .catch(function (err1) {
                 res.status(400).send("username is already taken");
-                res.send(err1);
             })
     }
 });
 
-app.post('/validate_usernames_answers',function (req,res) {
+app.post('/validate_usernames_answers',function (req,res) {//TODO how to use?
     var username = req.body['username'];
     var question_and_answers = req.body['questions_answers'];
     var answers_are_valid=true;
@@ -337,26 +317,6 @@ app.post('/validate_usernames_answers',function (req,res) {
     else {
         res.status(400).send("UNABLE TO VALIDATE QUESTIONS")
     }
-});
-
-app.get('/get_user_details',function (req,res,next) {
-    var username = getUsernameFromToken(req,res,next);
-    select_query('users','*',[util.format("User_name=\'%s\'",username)])
-        .then(function (result) {
-            var json_to_send = {
-                firstname:result[0]['First_name'],
-                lastname:result[0]['Last_name'],
-                city:result[0]['City'],
-                country:result[0]['Country'],
-                email:result[0]['Email'],
-                username:username,
-                password:result[0]['Password']
-            };
-            res.json(json_to_send);
-        })
-        .catch(function (err) {
-            res.send(err);
-        })
 });
 
 let sort_pois_by_avg_rating = () => {
@@ -435,46 +395,6 @@ app.get('/get_POIs/:categories',function (req,res) {
         })
 });
 
-// app.get('/POI', function (req, res) {
-//     select_query('POI','*')
-//         .then(function (result) {
-//             res.send(result);
-//         })
-//         .catch(function (error) {
-//             res.send(error);
-//         })
-// });
-
-// app.get('/retrievalQuestions', function (req, res) {
-//     select_query('retrievalQuestions','*')
-//         .then(function (result) {
-//             res.send(result);
-//         })
-//         .catch(function (error) {
-//             res.send(error);
-//         })
-// });
-
-// app.get('/get_userInterests', function (req, res) {
-//     select_query('userInterests','*')
-//         .then(function (result) {
-//             res.send(result);
-//         })
-//         .catch(function (error) {
-//             res.send(error);
-//         })
-// });
-
-// app.get('/users', function (req, res) {
-//     select_query('users','*')
-//         .then(function (result) {
-//             res.send(result);
-//         })
-//         .catch(function (error) {
-//             res.send(error);
-//         })
-// });
-
 app.get('/get_poi/:poi_name', function(req, res){
     var POI_NAME = req.params["poi_name"];
     select_query('POI',['*'],[util.format('name=\'%s\'',POI_NAME)])
@@ -501,22 +421,6 @@ app.get('/get_countries', function(req, res){
         })
 });
 
-app.get('/get_POIIDs_ByCategory',function (req,res) {
-    var categoryName = req.body['category'];
-    select_query('POI','*',[util.format('Category_name=\'%s\'', categoryName)])
-        .then(function (result) {
-            var pois = [];
-            for (let i = 0; i < result.length; i++) {
-                pois.push(result[i]['POI_ID']);
-            }
-            var json_to_send = {categoryPOIs:pois};
-            res.json(json_to_send);
-        })
-        .catch(function (err) {
-            console.log(err);
-            res.send(err);
-        })
-});
 app.get('/get_validation_questions', function(req, res){
     select_query('ValidationQuestions','*')
         .then(function (result) {
@@ -526,36 +430,12 @@ app.get('/get_validation_questions', function(req, res){
             res.send(error);
         })
 });
-// app.get('/get_validation_questions', function(req, res){
-//     select_query('ValidationQuestions','*')
-//         .then(function (result) {
-//             var questions = [];
-//             for (let i = 0; i < result.length; i++) {
-//                 questions.push(result[i]['que_description']);
-//             }
-//             var json_to_send = {questions:questions};
-//             res.json(questions);
-//         })
-//         .catch(function (err) {
-//             console.log(err);
-//             res.send(err);
-//         })
-// });
 
-// app.get('/get_POI_Picture',function (req,res) {
-//     var poi_name = req.body['poi_name'];
-//     select_query('POI','Picture',[util.format('name=\'%s\'', poi_name)])
-//         .then(function (result) {
-//             res.send(result);
-//         })
-//         .catch(function (error) {
-//             res.send(error);
-//         })
-// });
-
-app.post('/save_user_favorites',function (req,res) {
-    var username=req.body['username'], poi_id=req.body['poi_id'], poi_name=req.body['poi_name'];
-    var save_values = [surround_with_quotes(username),surround_with_quotes(poi_id),surround_with_quotes(poi_name)];
+app.post('/private/save_user_favorites',function (req,res) {
+    //TODO FIX DATE - WHEN WE ADD TO THE TABLE, ADD CURRENT DATE
+    var date = Date.now();
+    var username=req.username, poi_id=req.body['poi_id'], poi_name=req.body['poi_name'];
+    var save_values = [surround_with_quotes(username),surround_with_quotes(poi_id),surround_with_quotes(poi_name)];//TODO ADD DATE TO LATE COLUMN, AND ALSO ON COLUMN NAMES]
     //check all paramaters recieved
     if(!(username && poi_id && poi_name)){
         res.status(400).send('missing parameters')
@@ -568,17 +448,25 @@ app.post('/save_user_favorites',function (req,res) {
                 res.status(200).send('saving favorites completed successfully');
             })
             .catch(function (err1) {
-                var delete_where_conditions=[];
-                for (let i = 0; i < user_column_names.length; i++) {
-                    delete_where_conditions.push(util.format('%s=%s',userFavorites_column_names[i],(save_values[i])));
-                }
-                delete_query('userFavorites',delete_where_conditions)
-                    .then(function (result2) {
-                        res.send(err1 + '\nsaving is not completed')
-                    })
-                    .catch(function (err2) {
-                        res.send(util.format('First error:\n%s\nSecond Error:%s\nFavorite CREATED, Favorite is NOT DELETED',err1,err2))
-                    })
+                res.status(400).send(err1);
+
+
+                /*old code
+                // var delete_where_conditions=[];
+                // for (let i = 0; i < user_column_names.length; i++) {
+                //     delete_where_conditions.push(util.format('%s=%s',userFavorites_column_names[i],(save_values[i])));
+                // }
+                // delete_query('userFavorites',delete_where_conditions)
+                //     .then(function (result2) {
+                //         res.send(err1 + '\nsaving is not completed')
+                //     })
+                //     .catch(function (err2) {
+                //         res.send(util.format('First error:\n%s\nSecond Error:%s\nFavorite CREATED, Favorite is NOT DELETED',err1,err2))
+                //     })
+                */// old code
+
+
+
             })
             .catch(function (err) {
                 res.send(err);
@@ -586,18 +474,23 @@ app.post('/save_user_favorites',function (req,res) {
     }
 });
 
-app.get('/get_FavoritePOIs',function (req,res) {
+app.get('/private/get_FavoritePOIs',function (req,res) {//TODO WHAT IS IT
+    var username = req.username;
     var categories = req.body['categories'];
     var sorted_by_rating = (req.body['sorted_by_rating'] && (typeof req.body['sorted_by_rating'] === 'string' || req.body['sorted_by_rating'] instanceof String) && req.body['sorted_by_rating'].toLowerCase() === 'true');
     var rating_range = req.body["rating range"];
     var where_conditions = [];
+
+    console.log("hi"+req.body.categories);
+
     if(categories){
         var categories_surrounded_by_quotes = [];
         for (let i = 0; i < categories.length; i++) {
             categories_surrounded_by_quotes.push(surround_with_quotes(categories[i]))
         }
-        var query="SELECT POI.POI_ID FROM POI JOIN userFavorites ON POI.POI_ID=userFavorites.POI_ID WHERE [User_name] = '".concat(req.body.username,"'")+"AND Category_name=".concat(categories_surrounded_by_quotes.join(', '));
+        var query="SELECT POI.POI_ID FROM POI JOIN userFavorites ON POI.POI_ID=userFavorites.POI_ID WHERE [User_name] = '".concat(username,"'")+"AND Category_name=".concat(categories_surrounded_by_quotes.join(', '));
     }
+    // console.log(query);
     if(rating_range){
         where_conditions.push(util.format("(POI_ID IN (SELECT POI_ID FROM (SELECT POI_ID, AVG(cast(rating as decimal)) as avg FROM reviews GROUP BY POI_ID) WHERE avg BETWEEN %s AND %s)", rating_range['minimal_rating'],rating_range['maximal_rating']));
     }
@@ -641,21 +534,23 @@ app.get('/get_FavoritePOIs',function (req,res) {
         })
 });
 
-app.get('/get_amount_of_favorites',function (req,res) {
-    var username=req.body['username'];
+app.get('/private/get_amount_of_favorites',function (req,res) {
+    var username=req.username;
     var count_query = 'SELECT COUNT(*) as amount FROM userFavorites WHERE [User_name] = '.concat("'",username,"'");
     DButilsAzure.execQuery(count_query)
         .then(function (result) {
-            res.json(result);
+            res.status(200).send(result);
         })
         .catch(function (error) {
             res.send(error);
         })
 });
 
-app.delete('/delete_FavoritePOIs',function (req,res) {
-    var username=req.body['username'], poi_id=req.body['poi_id'];
-    var query = 'DELETE FROM InterestPointsOfUsers WHERE [User_name] = '.concat("'",username,"' AND [POI_ID] = '",poi_id,"'");
+app.delete('/private/delete_FavoritePOIs',function (req,res) {
+    //TODO MAYBE PARAM
+    //TODO return success
+    var username=req.username, poi_id=req.body['poi_id'];
+    var query = 'DELETE FROM userFavorites WHERE [User_name] = '.concat("'",username,"' AND [POI_ID] = '",poi_id,"'");
     DButilsAzure.execQuery(query)
         .then(function (result) {
             res.send(result);
@@ -664,18 +559,18 @@ app.delete('/delete_FavoritePOIs',function (req,res) {
             res.send(error);
         })
 });
-app.get('/get_3_random_popular_pois',function (req,res) {
+
+app.get('/get_3_random_popular_pois',function (req,res) {//TODO NOT RANDOM
     DButilsAzure.execQuery('SELECT TOP 3 * FROM POI WHERE Rank >= 3.5')
         .then(function(result){
             res.send(result)
         })
         .catch(function(err){
-            console.log(err);
             res.send(err)
         })
 });
 
-app.get('/search__poi/:name',function (req,res) {
+app.get('/search_poi/:name',function (req,res) {
     var nametag = req.params["name"];
     var query = 'SELECT * FROM POI WHERE name LIKE '.concat("'%", nametag,"%'");
     DButilsAzure.execQuery(query)
@@ -687,8 +582,8 @@ app.get('/search__poi/:name',function (req,res) {
         })
 });
 
-app.get('/get_last_2_favorites/:username',function (req,res) {
-    var username=req.params['username'];
+app.get('/private/get_last_2_favorites',function (req,res) {//todo check if work after we fix date on insertion.
+    var username=req.username;
     var query = 'SELECT TOP 2 * FROM POI INNER JOIN userFavorites ON POI.POI_ID = userFavorites.POI_ID WHERE userFavorites.User_name ='.concat("'",username,"'")+'ORDER BY userFavorites.add_Date DESC';
     DButilsAzure.execQuery(query)
         .then(function (result) {
@@ -700,6 +595,7 @@ app.get('/get_last_2_favorites/:username',function (req,res) {
 });
 
 app.get('/get_2_last_reviews/:poi_id',function (req,res) {
+    //TODO CHECK
     var poi_id = req.params["poi_id"];
     var query = 'SELECT TOP 2 * FROM Reviews WHERE POI_ID ='.concat(poi_id, " ORDER BY Date DESC");
     DButilsAzure.execQuery(query)
@@ -712,6 +608,7 @@ app.get('/get_2_last_reviews/:poi_id',function (req,res) {
 });
 
 app.put('/update_poi_views/:poi_id',function (req,res) {
+    //TODO CHECK
     var poi_id = req.params["poi_id"];
     var query = "UPDATE POI \n" +
         "SET view_amount= ((SELECT view_amount FROM POI WHERE POI_ID = " +poi_id +")) + 1 \n" +
@@ -726,6 +623,7 @@ app.put('/update_poi_views/:poi_id',function (req,res) {
 });
 
 app.post('/add_review_to_POI',function (req,res) {
+    //TODO CHECK
     var poi_id = req.body["poi_id"], content = req.body["content"], rating = req.body["rating"], username = req.body["User_name"], Date='GETDATE()';
     var max = 1;
     var query = 'SELECT reviewID FROM reviews WHERE reviewID=(SELECT max(reviewID) FROM reviews)';
@@ -760,7 +658,7 @@ app.post('/add_review_to_POI',function (req,res) {
                                         .then(function(result){
                                         })
                                         .catch(function(err){
-                                            console.log(err);
+
                                             res.send(err)
                                         })
                                 })
@@ -785,3 +683,111 @@ app.post('/add_review_to_POI',function (req,res) {
             res.send(err)
         });
 });
+
+
+
+
+
+
+// app.get('/retrievalQuestions', function (req, res) {
+//     select_query('retrievalQuestions','*')
+//         .then(function (result) {
+//             res.send(result);
+//         })
+//         .catch(function (error) {
+//             res.send(error);
+//         })
+// });
+
+// app.get('/get_userInterests', function (req, res) {
+//     select_query('userInterests','*')
+//         .then(function (result) {
+//             res.send(result);
+//         })
+//         .catch(function (error) {
+//             res.send(error);
+//         })
+// });
+
+// app.get('/users', function (req, res) {
+//     select_query('users','*')
+//         .then(function (result) {
+//             res.send(result);
+//         })
+//         .catch(function (error) {
+//             res.send(error);
+//         })
+// });
+
+// app.get('/get_user_details',function (req,res,next) {
+//     var username = getUsernameFromToken(req,res,next);
+//     select_query('users','*',[util.format("User_name=\'%s\'",username)])
+//         .then(function (result) {
+//             var json_to_send = {
+//                 firstname:result[0]['First_name'],
+//                 lastname:result[0]['Last_name'],
+//                 city:result[0]['City'],
+//                 country:result[0]['Country'],
+//                 email:result[0]['Email'],
+//                 username:username,
+//                 password:result[0]['Password']
+//             };
+//             res.json(json_to_send);
+//         })
+//         .catch(function (err) {
+//             res.send(err);
+//         })
+// });
+//
+//
+//
+//
+// function getUsernameFromToken(req,res,next){
+//     const token = req.header('x-auth-token');
+//     if (!token) res.status(401).send("Access denied. No token provided.");
+//     // verify token
+//     try {
+//         const decoded = jwt.verify(token, secret);
+//         return (decoded.name);
+//         req.username = userId;
+//         req.decoded = decoded;
+//         next();
+//         return userId;
+//     } catch (exception) {
+//         res.status(400).send("Invalid token.");
+//     }
+//     return true;
+// }
+// app.get('/get_POIIDs_ByCategory',function (req,res) {
+//     var categoryName = req.body['category'];
+//     select_query('POI','*',[util.format('Category_name=\'%s\'', categoryName)])
+//         .then(function (result) {
+//             var pois = [];
+//             for (let i = 0; i < result.length; i++) {
+//                 pois.push(result[i]['POI_ID']);
+//             }
+//             var json_to_send = {categoryPOIs:pois};
+//             res.json(json_to_send);
+//         })
+//         .catch(function (err) {
+//             console.log(err);
+//             res.send(err);
+//         })
+// });
+
+
+// app.get('/get_validation_questions', function(req, res){
+//     select_query('ValidationQuestions','*')
+//         .then(function (result) {
+//             var questions = [];
+//             for (let i = 0; i < result.length; i++) {
+//                 questions.push(result[i]['que_description']);
+//             }
+//             var json_to_send = {questions:questions};
+//             res.json(questions);
+//         })
+//         .catch(function (err) {
+//             console.log(err);
+//             res.send(err);
+//         })
+// });
