@@ -286,42 +286,41 @@ app.post('/register',function (req,res) {
 });
 
 app.post('/validate_usernames_answers',function (req,res) {//TODO how to use?
-    console.log(req.body);
     var username = req.body['username'];
     var question = req.body['question'];
     var answer = req.body['answer'];
-    var answers_are_valid=false;
     // for (let i = 0; i < question.length && answers_are_valid; i++) {
     var where_conditions=[];
     where_conditions.push(util.format('User_name=\'%s\'',username));
     where_conditions.push(util.format('Question=\'%s\'',question));
-    where_conditions.push(util.format('Answer=\'%s\'',answer));
+    // where_conditions.push(util.format('Answer=\'%s\'',answer));
     select_query('retrievalQuestions','*',where_conditions)
         .then(function (result) {
             if((result && result.length>0)) {
-                answers_are_valid = true;
+                if((result[0]['Answer'])==(answer)) {
+                    select_query('users', ['Password'], [util.format("User_name=\'%s\'", username)])
+                        .then(function (result) {
+                            var password = result[0]['Password'];
+                            var json_to_send = {password: password};
+                            res.json(json_to_send);
+                        })
+                        .catch(function (err) {
+                            res.status(500).send(err);
+                        })
 
+                }
+                else {
+                    res.status(400).send("Wrong answer!");
+                }
+            }
+            else {
+                res.status(400).send("error");
             }
         })
         .catch(function (err) {
             res.status(500).send(err);
         })
-    // }
-    console.log("result length:" + answers_are_valid);
-    if(answers_are_valid){
-        select_query('users',['Password'],[util.format("User_name=\'%s\'",username)])
-            .then(function (result) {
-                var password = result[0]['Password'];
-                var json_to_send = {password:password};
-                res.json(json_to_send);
-            })
-            .catch(function (err) {
-                res.status(500).send(err);
-            })
-    }
-    else {
-        res.status(400).send("UNABLE TO VALIDATE QUESTIONS")
-    }
+
 });
 
 app.get('/get_POIs/:categories',function (req,res) {
