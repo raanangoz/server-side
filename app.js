@@ -494,8 +494,6 @@ app.get('/private/get_FavoritePOIs',function (req,res) {//TODO WHAT IS IT
 
 });
 
-
-
 app.get('/private/get_amount_of_favorites',function (req,res) {
     var username=req.username;
     var count_query = 'SELECT COUNT(*) as amount FROM userFavorites WHERE [User_name] = '.concat("'",username,"'");
@@ -666,7 +664,17 @@ app.post('/get_user_details',function (req,res) {
         })
 });
 
-
+app.get('/private/get_userInterests', function (req, res) {
+    var username = req.username;
+    var where_conditions = [util.format("User_name= '%s'",username)];
+    select_query('userInterests','*',where_conditions)
+        .then(function (result) {
+            res.send(result);
+        })
+        .catch(function (error) {
+            res.send(error);
+        })
+});
 
 
 // app.get('/retrievalQuestions', function (req, res) {
@@ -679,15 +687,15 @@ app.post('/get_user_details',function (req,res) {
 //         })
 // });
 
-// app.get('/get_userInterests', function (req, res) {
-//     select_query('userInterests','*')
-//         .then(function (result) {
-//             res.send(result);
-//         })
-//         .catch(function (error) {
-//             res.send(error);
-//         })
-// });
+app.get('/get_userInterests', function (req, res) {
+    select_query('userInterests','*')
+        .then(function (result) {
+            res.send(result);
+        })
+        .catch(function (error) {
+            res.send(error);
+        })
+});
 
 // app.get('/users', function (req, res) {
 //     select_query('users','*')
