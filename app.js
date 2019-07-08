@@ -521,7 +521,7 @@ app.delete('/private/delete_FavoritePOIs',function (req,res) {
 });
 
 app.get('/get_3_random_popular_pois',function (req,res) {//TODO NOT RANDOM
-    DButilsAzure.execQuery('SELECT TOP 3 * FROM POI WHERE Rank >= 3.5')
+    DButilsAzure.execQuery('SELECT * FROM POI WHERE Rank >= 3.5')
         .then(function(result){
             res.send(result)
         })
@@ -567,7 +567,7 @@ app.get('/get_2_last_reviews/:poi_id',function (req,res) {
         })
 });
 
-app.put('/update_poi_views/:poi_id',function (req,res) {
+app.put('/update_poi_views/private/:poi_id',function (req,res) {
     //TODO CHECK
     var poi_id = req.params["poi_id"];
     var query = "UPDATE POI \n" +
@@ -582,9 +582,9 @@ app.put('/update_poi_views/:poi_id',function (req,res) {
         })
 });
 
-app.post('/add_review_to_POI',function (req,res) {
+app.post('/private/add_review_to_POI',function (req,res) {
     //TODO CHECK
-    var poi_id = req.body["poi_id"], content = req.body["content"], rating = req.body["rating"], username = req.body["User_name"], Date='GETDATE()';
+    var poi_id = req.body["poi_id"], content = req.body["content"], rating = req.body["rating"], username=req.username, Date='GETDATE()';
     var max = 1;
     var query = 'SELECT reviewID FROM reviews WHERE reviewID=(SELECT max(reviewID) FROM reviews)';
     var max_res;
