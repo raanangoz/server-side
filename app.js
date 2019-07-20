@@ -1,5 +1,4 @@
 //requires and initialazations
-const ip = require('./pois');
 var express = require('express');
 var app = express();
 var DButilsAzure = require('./DButils');
@@ -14,8 +13,7 @@ app.use(cors());
 
 const user_column_names = ['User_name','First_name','Last_name','City','Country', 'Password', 'Email'];
 const userInterest_column_names = ['User_name', 'Category_name'];
-const review_column_names = ['reviewID','content','Date','rating','POI_ID','User_name'];
-const userFavorites_column_names = ['User_name', 'POI_ID', 'POI_name'];
+const userFavorites_column_names = ['User_name', 'POI_ID', 'POI_name', 'add_Date'];
 const retrievalQuestions_column_names = ['User_name', 'Question', 'Answer'];
 
 app.use("/", function(req,res,next) {
@@ -115,10 +113,6 @@ let select_query = (table_name,cols_to_select_array, where_conditions_array) => 
     );
 };
 
-app.get('/get_categories', function(req, res){
-    ip.get_categories(req,res);
-});
-
 app.get ('/get_poi_details/:poi_id', function(req, res){
     var poi_id = req.params['poi_id'];
     try {
@@ -162,22 +156,6 @@ app.get ('/get_poi_details/:poi_id', function(req, res){
     }
 });
 
-app.get('/get_retrieval_questions_for_user/:username',function (req, res) {
-    var username = req.params["username"];
-    select_query('retrievalQuestions',['Question'],[util.format('User_name=\'%s\'',username)])
-        .then(function (result) {
-            var questions = [];
-            for (let i = 0; i < result.length; i++) {
-                var question = result[i]['Question'];
-                questions.push(question);
-            }
-            var json_to_send = {
-                questions:questions
-            };
-            res.json(json_to_send);
-        })
-});
-
 app.post('/login',function (req,res) {
     var username = req.body['username'];
     var password = req.body['password'] ;
@@ -196,8 +174,24 @@ app.post('/login',function (req,res) {
         })
 });
 
+app.get('/get_retrieval_questions_for_user/:username',function (req, res) {
+    console.log(req.body);
+    var username = req.params["username"];
+    select_query('retrievalQuestions',['Question'],[util.format('User_name=\'%s\'',username)])
+        .then(function (result) {
+            var questions = [];
+            for (let i = 0; i < result.length; i++) {
+                var question = result[i]['Question'];
+                questions.push(question);
+            }
+            var json_to_send = {
+                questions:questions
+            };
+            res.json(json_to_send);
+        })
+});
+
 app.post('/register',function (req,res) {
-    // console.log(req.body);
     var firstname=req.body['firstname'], lastname=req.body['lastname'], city=req.body['city'],
         country=req.body['country'], email=req.body['email'], username=req.body['username'],
         password=req.body['password'], favorite_categories=req.body['interests'],
@@ -210,7 +204,13 @@ app.post('/register',function (req,res) {
         res.status(400).send("password must contain only digits and letters");
     }
     if ( password.length < 5 || password.length > 10){
-        res.status(400).send('password must be between 5 and 10 characters')
+        res.status(400).send('password must be between 5 and 10 characters');
+    }
+    if(questions[0]==questions[1]){
+        res.status(400).send('Please choose two different questions');
+    }
+    if(favorite_categories.length<2){
+        res.status(400).send('Please choose two categories');
     }
     else if(!(favorite_categories && favorite_categories.length>0 && firstname && lastname && city
         && country && email && username && password && favorite_categories)){
@@ -325,48 +325,18 @@ app.post('/validate_usernames_answers',function (req,res) {//TODO how to use?
 
 app.get('/get_POIs/:categories',function (req,res) {
     var cat = req.params["categories"];
-    //var sorted_by_rating = (req.params['sorted_by_rating'] && (typeof req.params['sorted_by_rating'] === 'String' || req.params['sorted_by_rating'] instanceof String) && req.params['sorted_by_rating'].toLowerCase() === 'true');
-    //var rating_range = req.params["rating range"];
     var where_conditions = [];
     if(cat){
         var categories_surrounded_by_quotes = [];
-        // for (let i = 0; i < cat.length; i++) {
         categories_surrounded_by_quotes.push(surround_with_quotes(cat))
     }
     where_conditions.push(util.format("Category_name in (%s)",categories_surrounded_by_quotes.join(', ')));
-    // }
-    //if(rating_range){
-    //    where_conditions.push(util.format("(POI_ID IN (SELECT POI_ID FROM (SELECT POI_ID, AVG(cast(rating as decimal)) as avg FROM reviews GROUP BY POI_ID) WHERE avg BETWEEN %s AND %s)", rating_range['minimal_rating'],rating_range['maximal_rating']));
-    // }
-
     select_query('POI', ['*'],where_conditions)
         .then(function (desired_pois_as_tuple) {
             var desired_pois = [];
             for (let i = 0; i < desired_pois_as_tuple.length; i++) {
                 desired_pois.push(desired_pois_as_tuple[i]);
             }
-            // var poi_ids = [];
-            // console.log("sorted by rating: " + sorted_by_rating);
-            // if (sorted_by_rating){
-            //      sort_pois_by_avg_rating()
-            //          .then(function (sorted_pois) {
-            //              for (let i = 0; i < sorted_pois.length; i++) {
-            //                  if([sorted_pois[i] in desired_pois])
-            //                      poi_ids.push(sorted_pois[i])
-            //              }
-            //              for (let i = 0; i < desired_pois[i]; i++) {
-            //                  if(!(desired_pois[i]) in poi_ids){
-            //                      poi_ids.push(desired_pois[i]);
-            //                  }
-            //              }
-            //              var json_to_return = {poi_ids:poi_ids};
-            //              res.json(json_to_return)
-            //          })
-            //          .catch(function (err) {
-            //              res.status(500).send(err)
-            //          })
-            //  }
-            // else {
             poi_ids = desired_pois;
             console.log('length: '+poi_ids.length);
             var json_to_return = {pois:poi_ids};
@@ -378,7 +348,7 @@ app.get('/get_POIs/:categories',function (req,res) {
         })
 });
 
-app.get('/get_poi/:poi_name', function(req, res){
+app.get('/search_poi/:poi_name', function(req, res){
     var POI_NAME = req.params["poi_name"];
     select_query('POI',['*'],[util.format('name=\'%s\'',POI_NAME)])
         .then(function (result) {
@@ -415,11 +385,8 @@ app.get('/get_validation_questions', function(req, res){
 });
 
 app.post('/private/save_user_favorites',function (req,res) {
-    //TODO FIX DATE - WHEN WE ADD TO THE TABLE, ADD CURRENT DATE
-    var date = Date.now();
-    var username=req.username, poi_id=req.body['poi_id'], poi_name=req.body['poi_name'];
-    var save_values = [surround_with_quotes(username),surround_with_quotes(poi_id),surround_with_quotes(poi_name)];//TODO ADD DATE TO LATE COLUMN, AND ALSO ON COLUMN NAMES]
-    //check all paramaters recieved
+    var username=req.username, poi_id=req.body['poi_id'], poi_name=req.body['poi_name'], Date='GETDATE()';
+    var save_values = [surround_with_quotes(username),surround_with_quotes(poi_id),surround_with_quotes(poi_name),Date];//TODO ADD DATE TO LATE COLUMN, AND ALSO ON COLUMN NAMES]
     if(!(username && poi_id && poi_name)){
         res.status(400).send('missing parameters')
     }
@@ -432,24 +399,6 @@ app.post('/private/save_user_favorites',function (req,res) {
             })
             .catch(function (err1) {
                 res.status(400).send(err1);
-
-
-                /*old code
-                // var delete_where_conditions=[];
-                // for (let i = 0; i < user_column_names.length; i++) {
-                //     delete_where_conditions.push(util.format('%s=%s',userFavorites_column_names[i],(save_values[i])));
-                // }
-                // delete_query('userFavorites',delete_where_conditions)
-                //     .then(function (result2) {
-                //         res.send(err1 + '\nsaving is not completed')
-                //     })
-                //     .catch(function (err2) {
-                //         res.send(util.format('First error:\n%s\nSecond Error:%s\nFavorite CREATED, Favorite is NOT DELETED',err1,err2))
-                //     })
-                */// old code
-
-
-
             })
             .catch(function (err) {
                 res.send(err);
@@ -459,50 +408,17 @@ app.post('/private/save_user_favorites',function (req,res) {
 
 app.get('/private/get_FavoritePOIs',function (req,res) {//TODO WHAT IS IT
     var username = req.username;
-
-
-
-
     var query="SELECT POI.* FROM POI JOIN userFavorites ON POI.POI_ID=userFavorites.POI_ID WHERE [User_name] = '".concat(username,"'");
-
-// console.log(query);
-
-//select_query('userFavorites', ['POI_ID'],where_conditions && [util.format('User_name=\'%s\'', username)])
     DButilsAzure.execQuery(query)
         .then(function (desired_pois_as_tuple) {
             var desired_pois = [];
             for (let i = 0; i < desired_pois_as_tuple.length; i++) {
                 desired_pois.push(desired_pois_as_tuple[i]);
             }
-
-            // console.log(desired_pois);
-            // sort_pois_by_avg_rating()
-
-
-
             res.json(desired_pois);
         })
         .catch(function (err) {
             res.status(500).send(err)
-        })
-
-
-    // poi_ids = desired_pois;
-    // console.log('length: '+poi_ids.length);
-    // var json_to_return = {poi_ids:poi_ids};
-    // res.json(json_to_return)
-
-});
-
-app.get('/private/get_amount_of_favorites',function (req,res) {
-    var username=req.username;
-    var count_query = 'SELECT COUNT(*) as amount FROM userFavorites WHERE [User_name] = '.concat("'",username,"'");
-    DButilsAzure.execQuery(count_query)
-        .then(function (result) {
-            res.status(200).send(result);
-        })
-        .catch(function (error) {
-            res.send(error);
         })
 });
 
@@ -522,18 +438,6 @@ app.delete('/private/delete_FavoritePOIs',function (req,res) {
 
 app.get('/get_3_random_popular_pois',function (req,res) {//TODO NOT RANDOM
     DButilsAzure.execQuery('SELECT * FROM POI WHERE Rank >= 3.5')
-        .then(function(result){
-            res.send(result)
-        })
-        .catch(function(err){
-            res.send(err)
-        })
-});
-
-app.get('/search_poi/:name',function (req,res) {
-    var nametag = req.params["name"];
-    var query = 'SELECT * FROM POI WHERE name LIKE '.concat("'%", nametag,"%'");
-    DButilsAzure.execQuery(query)
         .then(function(result){
             res.send(result)
         })
@@ -644,26 +548,6 @@ app.post('/private/add_review_to_POI',function (req,res) {
         });
 });
 
-app.post('/get_user_details',function (req,res) {
-    var username = req.body['username'];
-    select_query('users','*',[util.format("User_name=\'%s\'",username)])
-        .then(function (result) {
-            var json_to_send = {
-                // firstname:result[0]['First_name'],
-                // lastname:result[0]['Last_name'],
-                // city:result[0]['City'],
-                // country:result[0]['Country'],
-                // email:result[0]['Email'],
-                // username:username,
-                password:result[0]['Password']
-            };
-            res.json(json_to_send);
-        })
-        .catch(function (err) {
-            res.send(err);
-        })
-});
-
 app.get('/private/get_userInterests', function (req, res) {
     var username = req.username;
     var where_conditions = [util.format("User_name= '%s'",username)];
@@ -676,7 +560,6 @@ app.get('/private/get_userInterests', function (req, res) {
         })
 });
 
-
 // app.get('/retrievalQuestions', function (req, res) {
 //     select_query('retrievalQuestions','*')
 //         .then(function (result) {
@@ -687,16 +570,6 @@ app.get('/private/get_userInterests', function (req, res) {
 //         })
 // });
 
-app.get('/get_userInterests', function (req, res) {
-    select_query('userInterests','*')
-        .then(function (result) {
-            res.send(result);
-        })
-        .catch(function (error) {
-            res.send(error);
-        })
-});
-
 // app.get('/users', function (req, res) {
 //     select_query('users','*')
 //         .then(function (result) {
@@ -706,7 +579,6 @@ app.get('/get_userInterests', function (req, res) {
 //             res.send(error);
 //         })
 // });
-
 
 //
 //
@@ -745,7 +617,6 @@ app.get('/get_userInterests', function (req, res) {
 //         })
 // });
 
-
 // app.get('/get_validation_questions', function(req, res){
 //     select_query('ValidationQuestions','*')
 //         .then(function (result) {
@@ -761,7 +632,6 @@ app.get('/get_userInterests', function (req, res) {
 //             res.send(err);
 //         })
 // });
-
 
 // let sort_pois_by_avg_rating = () => {
 //     return new Promise((resolve, reject) => {
@@ -783,3 +653,23 @@ app.get('/get_userInterests', function (req, res) {
 //         }
 //     )
 // };
+
+// app.post('/get_user_details',function (req,res) {
+//     var username = req.body['username'];
+//     select_query('users','*',[util.format("User_name=\'%s\'",username)])
+//         .then(function (result) {
+//             var json_to_send = {
+//                 // firstname:result[0]['First_name'],
+//                 // lastname:result[0]['Last_name'],
+//                 // city:result[0]['City'],
+//                 // country:result[0]['Country'],
+//                 // email:result[0]['Email'],
+//                 // username:username,
+//                 password:result[0]['Password']
+//             };
+//             res.json(json_to_send);
+//         })
+//         .catch(function (err) {
+//             res.send(err);
+//         })
+// });
