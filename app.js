@@ -203,9 +203,9 @@ app.post('/register',function (req,res) {
     if (!(password.match("^[A-Za-z0-9]+$"))) {
         res.status(400).send("password must contain only digits and letters");
     }
-    if ( password.length < 5 || password.length > 10){
-        res.status(400).send('password must be between 5 and 10 characters');
-    }
+    // if ( password.length < 5 || password.length > 10){
+    //     res.status(400).send('password must be between 5 and 10 characters');
+    // }
     if(questions[0]==questions[1]){
         res.status(400).send('Please choose two different questions');
     }
@@ -217,10 +217,10 @@ app.post('/register',function (req,res) {
 
         res.status(400).send('missing parameters')
     }
-    else if (username.length <3 || username.length > 8){
-
-        res.send('username must be between 3 and 8 characters');
-    }
+    // else if (username.length <3 || username.length > 8){
+    //
+    //     res.status(400).send('username must be between 3 and 8 characters');
+    // }
     else if (!(username.match("^[A-Za-z]+$"))) {
 
         res.status(400).send("username must contain only letters");
@@ -272,7 +272,7 @@ app.post('/register',function (req,res) {
                         }
                         delete_query('users', delete_where_conditions)
                             .then(function (result3) {
-                                res.send(err1 + '\nNo registration completed')
+                                res.status(400).send(err1 + '\nNo registration completed')
                             })
                             .catch(function (err3) {
                                 res.status(400).send(util.format('First error:\n%s\nSecond Error:%s\nUSER CREATED, NO CATEGORIES INSERTED, USER NOT DELETED', err1, err2))
@@ -471,11 +471,11 @@ app.get('/get_2_last_reviews/:poi_id',function (req,res) {
         })
 });
 
-app.put('/update_poi_views/private/:poi_id',function (req,res) {
-    //TODO CHECK
+app.put('/update_poi_views/:poi_id',function (req,res) {
+
     var poi_id = req.params["poi_id"];
     var query = "UPDATE POI \n" +
-        "SET view_amount= ((SELECT view_amount FROM POI WHERE POI_ID = " +poi_id +")) + 1 \n" +
+        "SET view_amount = ((SELECT view_amount FROM POI WHERE POI_ID = " +poi_id +")) + 1 \n" +
         "WHERE POI_ID = " +poi_id ;
     DButilsAzure.execQuery(query)
         .then(function (result) {
