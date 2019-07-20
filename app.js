@@ -203,9 +203,9 @@ app.post('/register',function (req,res) {
     if (!(password.match("^[A-Za-z0-9]+$"))) {
         res.status(400).send("password must contain only digits and letters");
     }
-    // if ( password.length < 5 || password.length > 10){
-    //     res.status(400).send('password must be between 5 and 10 characters');
-    // }
+     if ( password.length < 5 || password.length > 10){
+         res.status(400).send('password must be between 5 and 10 characters');
+     }
     if(questions[0]==questions[1]){
         res.status(400).send('Please choose two different questions');
     }
@@ -217,10 +217,10 @@ app.post('/register',function (req,res) {
 
         res.status(400).send('missing parameters')
     }
-    // else if (username.length <3 || username.length > 8){
-    //
-    //     res.status(400).send('username must be between 3 and 8 characters');
-    // }
+     else if (username.length <3 || username.length > 8){
+    
+         res.status(400).send('username must be between 3 and 8 characters');
+     }
     else if (!(username.match("^[A-Za-z]+$"))) {
 
         res.status(400).send("username must contain only letters");
